@@ -1,5 +1,7 @@
 import sys, pygame
 from math import atan, tan, sin, cos
+import ctypes
+from random import randint
 
 class asteroid(object):
     def __init__(self,size):
@@ -8,6 +10,7 @@ class asteroid(object):
         self.pos = (0,0)
 
         self.vel = (0,0)
+        self.out = [False, False]
 
     def render(self):
         """
@@ -68,7 +71,36 @@ class asteroid(object):
                 del i
                 player.bullets.pop(k)
 
+        r = self.render().get_rect(center=self.center())
+        pygame.draw.rect(display, (0,255,0),r, 5)
+        x,y = self.pos
+        w,h = self.size
+        if r.bottom < 0 and not self.out[1]:
+            self.out[1] = True
+            y= size[1]
+        elif r.top > size[1] and not self.out[1]:
+            self.out[1] = True
+            y = -h
+        
+        if r.right < 0 and not self.out[0]:
+            self.out[0] = True
+            x= size[0]
+        elif r.left > size[0] and not self.out[0]:
+            self.out[0] = True
+            x = -w
+
+        self.pos = (x,y)
+        cx,cy = self.center()
+        if cx > 0 and cx < size[0]:
+            self.out[0] = False
+        if cy > 0 and cy < size[1]:
+            self.out[1] = False
+
     def hit(self, bullet):
+        x = explodeParticle(self.center(),5,1000,3)
+        particles.append(x)
+
+
         global asteroids
 
         #spawn two new asteroids
@@ -130,6 +162,8 @@ class bulltet(object):
         self.image = None
         self.pos = pos
         self.rotateBox = (50,50)#increased margins for rotate area
+        self.out = [False,False]
+        self.distance = 0
 
     def centerBullet(self):
         img = self.render()
@@ -199,7 +233,35 @@ class bulltet(object):
 
         self.pos = (x1+x, y1+y)
 
+        self.distance += ((x**2)+(y**2))**0.5
+
         return x1,y1
+
+    def collision(self):
+        r = self.render().get_rect(center=self.center())
+
+        x,y = self.pos
+        w,h = self.size
+        if r.bottom < 0 and not self.out[1]:
+            self.out[1] = True
+            y= size[1]
+        elif r.top > size[1] and not self.out[1]:
+            self.out[1] = True
+            y = -h
+        
+        if r.right < 0 and not self.out[0]:
+            self.out[0] = True
+            x= size[0]
+        elif r.left > size[0] and not self.out[0]:
+            self.out[0] = True
+            x = -w
+
+        self.pos = (x,y)
+        cx,cy = self.center()
+        if cx > 0 and cx < size[0]:
+            self.out[0] = False
+        if cy > 0 and cy < size[1]:
+            self.out[1] = False
 
 class player(object):
     """
@@ -222,6 +284,8 @@ class player(object):
         self.shootTime = 0
         self.angle = 0
         self.out = [False,False]
+
+        self.lives = 3
     
     def render(self):
         """
@@ -282,6 +346,8 @@ class player(object):
 
         x1,y1 = distance
         x2, y2 = self.pos
+
+        
 
         self.pos = (x1+x2, y1+y2)
 
@@ -397,47 +463,33 @@ class player(object):
         self.vel = (x,y)
         self.move(speed)
 
-    def shoot(self, mouse):
-        x,y = self.center()
-        x1,y1 = mouse
-
-        x = x-x1
-        y = y-y1
-        x = -x
-        y = -y
-
-        if abs(x) > abs(y):
-            y = y/abs(x)
-            x = x/abs(x)
-
-        elif (x**2)**0.5 < (y**2)**0.5:
-            x = x/((y**2)**0.5)
-            y = y/((y**2)**0.5)
-        
-        else:
-            x = x/((x**2)**0.5)
-            y = y/((y**2)**0.5)
-
-        px,py = self.pos
-        #px += self.size[0]/2
-        #py += self.size[1]/2
-
+    def shoot(self):
         if pygame.time.get_ticks() - self.shootTime >= 350:
             self.shootTime = pygame.time.get_ticks()
-            a = atan(abs(y/x))
-            a = a*180
-            a = a/3.1415
+            a = self.angle
 
             path = 'imgs/phonyR.png'
 
-            if x<0 and y<0:
-               a =  360-a 
-            if x<0 and y>0:
-                a=a
-            if x>0 and y>0:
-                a = 360-a
+            x,y = self.vel
 
-            #print(a)
+            #calculate velocity
+            angle = self.angle
+            if angle > 90 and angle < 180:
+                angle = 180-angle
+            elif angle >= 180 and angle < 270:
+                angle = angle - 180
+            elif angle > 270 and angle <= 360:
+                angle = 360 - angle
+
+            x = (cos(angle*(3.1415/180)))
+            y = (sin(angle*(3.1415/180)))
+
+            if self.angle > 90 and self.angle < 270:
+                if x > 0:
+                    x = -x
+            if self.angle > 0 and self.angle  < 180:
+                if y > 0:
+                    y = -y
             
 
             x = bulltet(self.center(),(x,y),a,(100,40))
@@ -449,7 +501,7 @@ class player(object):
 
             self.bullets.append(x)
 
-    def collision(self):
+    def collision(self, asteroids):
         #check if player is off screen:
         r = self.render().get_rect(center=self.center())
         pygame.draw.rect(display, (0,255,0),r, 5)
@@ -476,8 +528,48 @@ class player(object):
         if cy > 0 and cy < size[1]:
             self.out[1] = False
 
-        print(self.pos, self.out, r.bottom)
+        for i in asteroids:
+            ar = i.render().get_rect(center=i.center())
+            if ar.colliderect(r):
+                self.kill()
+                asteroids.pop(asteroids.index(i))
+
+                x = explodeParticle(i.center(),5,1000,3)
+                particles.append(x)
+
+    def kill(self):
+        if self.lives == 0:
+            global mode
+            mode = 'death'
+        else:
+            self.lives -= 1
         
+class explodeParticle(object):
+    def __init__(self,pos,amount,radius,size=1):
+        self.pos = pos
+        self.num = amount
+        self.dis = 0
+        self.maxRadius = radius
+        self.r = 0
+        self.size = size
+
+        self.angle = 360/amount
+
+    def draw(self):
+        a = 0
+        for i in range(self.num):
+            x = (cos(a)*self.r)
+            y = (sin(a)*self.r)
+            x1,y1 = self.pos
+            pygame.draw.circle(display,(90,90,90),(int(x+x1),int(y+y1)),self.size)
+            a += self.angle
+            self.r += 1
+
+        if self.r >= self.maxRadius:
+            global particles
+            k = particles.index(self)
+            particles.pop(k)
+
 
 def getKeys():
     current_keys = {'a': 97, 'b': 98, 'c': 99, 'd': 100, 'e': 101, 'f': 102, 'g': 103, 'h': 104, 'i': 105, 'j': 106, 'k': 107, 'l': 108, 'm': 109,
@@ -502,7 +594,7 @@ def update(disp, screen):
     screen.blit(disp, (0,0))
     pygame.display.flip()
 
-
+ctypes.windll.shcore.SetProcessDpiAwareness(1)
 pygame.init()
 
 size = (900,900)
@@ -515,50 +607,95 @@ display.fill((255,255,255))
 
 p = player((100,100))
 p.image = pygame.image.load('imgs/index.png')
-p.pos = (50,50)
+p.pos = (450,450)
 
 
 asteroids = []
+particles = []
+
+mode = 'game'
 while True:
+    
     xm, ym = pygame.mouse.get_pos()
     for event in pygame.event.get():
         if event.type == pygame.QUIT: sys.exit()
 
-    #move
-    
-    p.input(dt, (xm,ym))
+    if mode == 'game':
+        #move
+        
+        p.input(dt, (xm,ym))
 
-    player = p.render()
+        player = p.render()
 
-    display.blit(player, p.pos)
-    p.collision()
+        display.blit(player, p.pos)
+        p.collision(asteroids)
 
-    a,b = p.center()
-    pygame.draw.circle(display, (0,0,0), (int(a), int(b)), 5)
-    for bullet in p.bullets:
-        display.blit(bullet.render(), bullet.pos)
-        x,y = bullet.center()
-        #print(x,y, bullet.pos)
-        #pygame.draw.circle(display, (0,0,0), (int(x),int(y)), 5)
-        bullet.move(dt)
-        if x<0 or x>size[0] or y<0 or y>size[1]:
-            k = p.bullets.index(bullet)
-            del bullet
-            p.bullets.pop(k)
-    
-    if not asteroids:
-        x = asteroid((200,200))
-        x.pos = (100,100)
-        x.vel = (20,20)
-        x.image = pygame.image.load('imgs/asteroid.png')
-        asteroids.append(x)
+        a,b = p.center()
+        pygame.draw.circle(display, (0,0,0), (int(a), int(b)), 5)
+        for bullet in p.bullets:
+            display.blit(bullet.render(), bullet.pos)
+            x,y = bullet.center()
+            #print(x,y, bullet.pos)
+            #pygame.draw.circle(display, (0,0,0), (int(x),int(y)), 5)
+            bullet.move(dt)
+            bullet.collision()
+            if bullet.distance > 800:
+                x = explodeParticle(bullet.center(),5,100)
+                particles.append(x)
+                k = p.bullets.index(bullet)
+                del bullet
+                p.bullets.pop(k)
 
-    for roid in asteroids:
-        display.blit(roid.render(), roid.pos)
-        roid.move(dt)
-        roid.collision(p)
+        for particle in particles:
+            particle.draw()
 
-    
+        #spawn asteroids
+        if len(asteroids) < 6:
+            x = asteroid((200,200))
+            x.pos = (randint(0,size[0]),randint(0,size[1]))
+
+            v = randint(0,1)
+            if v == 0: v -=1
+            v1 = randint(0,1)
+            if v1 == 0: v-=1
+
+            d = randint(0,100)
+            d1 = randint(0,100)
+
+            v = str(v) + '.' + str(d)
+            v1 = str(v1) + '.' + str(d1)
+
+            v = float(v)
+            v1 = float(v1)
+
+            x.vel = (20*v,20*v1)
+            x.image = pygame.image.load('imgs/asteroid.png')
+
+            r = x.render().get_rect(center=x.center())
+            pr = p.render().get_rect(center=p.center())
+
+            if not pr.colliderect(r):
+                asteroids.append(x)
+
+        for roid in asteroids:
+            display.blit(roid.render(), roid.pos)
+            roid.move(dt)
+            roid.collision(p)
+
+    if mode == 'death':
+        player = p.render()
+        display.blit(player, p.pos)
+
+        for roid in asteroids:
+            asteroids.pop(asteroids.index(roid))
+
+            x = explodeParticle(roid.center(),5,1000,3)
+            particles.append(x)
+        
+        for particle in particles:
+            particle.draw()
+
+            
 
     update(display, screen)
     display.fill((0,255,255))
