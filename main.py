@@ -105,13 +105,26 @@ class asteroid(object):
 
         #spawn two new asteroids
         
-        vel = bullet.vel
-        x,y = vel
-        x = x*2
-        y = y*2
+        
 
-        newVel = [-(y),x]
-        newVel2 = [(y),-x]
+        vels = []
+        for i in 'ab':
+
+            v1,v2 = self.vel
+            vx,vy = self.vel
+            vx += randint(-2,2)
+            vy += randint(-2,3)
+
+            while True:
+                a = (vx < v1)
+                b = (vy < v2)
+                
+                if a and b:
+                    vx = vx*1.05
+                    vy = vy*1.05
+                else: break
+            
+            vels.append([vx,vy])
 
         w,h = self.size
         size = (int(w/1.5),int(h/1.5))
@@ -122,30 +135,33 @@ class asteroid(object):
             c = h
 
         if c>60:
-            x = asteroid(size)
-            x.vel = (20*newVel[0],20*newVel[1])
+            for vel in vels:
+                x = asteroid(size)
+                
+                v = randint(0,1)
+                if v == 0: v -=1
+                v1 = randint(0,1)
+                if v1 == 0: v-=1
 
-            newPX,newPY = self.center()
-            vx,vy = newVel
-            newPX += vx*10
-            newPY += vy*10
-            x.pos = (newPX,newPY)
-            x.image = pygame.image.load('imgs/asteroid.png')
+                d = randint(0,100)
+                d1 = randint(0,100)
+
+                v = str(v) + '.' + str(d)
+                v1 = str(v1) + '.' + str(d1)
+
+                v = float(v)
+                v1 = float(v1)
+
+                x.vel = (65*v,65*v1)
+
+                
+                x.pos = self.center()
+                x.image = pygame.image.load('imgs/asteroid.png')
+                
+
+                asteroids.append(x)
+
             
-
-            asteroids.append(x)
-
-            x = asteroid(size)
-            x.vel = (20*newVel2[0],20*newVel2[1])
-            
-            newPX,newPY = self.center()
-            vx,vy = newVel2
-            newPX += vx/5000
-            newPY += vy/5000
-            x.pos = (newPX,newPY)
-            x.image = pygame.image.load('imgs/asteroid.png')
-
-            asteroids.append(x)
             update(display, screen)
         
 
@@ -284,6 +300,8 @@ class player(object):
         self.shootTime = 0
         self.angle = 0
         self.out = [False,False]
+
+        self.deathTime = 0
 
         self.lives = 3
     
@@ -541,9 +559,32 @@ class player(object):
         if self.lives == 0:
             global mode
             mode = 'death'
+            self.deathTime = pygame.time.get_ticks()
         else:
             self.lives -= 1
         
+    def renderHealth(self, width, color):
+        w = width*2*(self.lives+1)
+        k = pygame.Surface((w,50))
+        
+        n = 0
+        c = True
+        for i in range(w):
+            if c:
+                pygame.draw.line(k, color, (i,0), (i,50))
+            n += 1
+
+            if n == 49:
+                if c:
+                    c = False
+                else:
+                    c = True
+                n = 0
+        k.set_colorkey((0,0,0))
+        display.blit(k, (5,5))
+
+
+
 class explodeParticle(object):
     def __init__(self,pos,amount,radius,size=1):
         self.pos = pos
@@ -594,6 +635,27 @@ def update(disp, screen):
     screen.blit(disp, (0,0))
     pygame.display.flip()
 
+def restart():
+    global clock
+    global dt
+    global display
+    global asteroids
+    global particles
+    global mode
+    clock = pygame.time.Clock()
+    dt = 0
+    display.fill((255,255,255))
+    p = player((100,100))
+    p.image = pygame.image.load('imgs/index.png')
+    p.pos = (450,450)
+
+
+    asteroids = []
+    particles = []
+
+    mode = 'game'
+    return p
+
 ctypes.windll.shcore.SetProcessDpiAwareness(1)
 pygame.init()
 
@@ -602,6 +664,7 @@ display = pygame.Surface(size)
 screen = pygame.display.set_mode(size)
 clock = pygame.time.Clock()
 dt = 0
+mouse = pygame.Rect(0, 0, 2, 2)
 
 display.fill((255,255,255))
 
@@ -613,21 +676,21 @@ p.pos = (450,450)
 asteroids = []
 particles = []
 
-mode = 'game'
+mode = 'death'
 while True:
     
     xm, ym = pygame.mouse.get_pos()
+    mouse.center = (xm,ym)
     for event in pygame.event.get():
         if event.type == pygame.QUIT: sys.exit()
 
     if mode == 'game':
         #move
-        
         p.input(dt, (xm,ym))
 
-        player = p.render()
+        re = p.render()
 
-        display.blit(player, p.pos)
+        display.blit(re, p.pos)
         p.collision(asteroids)
 
         a,b = p.center()
@@ -650,7 +713,7 @@ while True:
             particle.draw()
 
         #spawn asteroids
-        if len(asteroids) < 6:
+        if len(asteroids) < 4:
             x = asteroid((200,200))
             x.pos = (randint(0,size[0]),randint(0,size[1]))
 
@@ -668,7 +731,7 @@ while True:
             v = float(v)
             v1 = float(v1)
 
-            x.vel = (20*v,20*v1)
+            x.vel = (60*v,60*v1)
             x.image = pygame.image.load('imgs/asteroid.png')
 
             r = x.render().get_rect(center=x.center())
@@ -682,9 +745,11 @@ while True:
             roid.move(dt)
             roid.collision(p)
 
+        p.renderHealth(20, (255,0,0))
+
     if mode == 'death':
-        player = p.render()
-        display.blit(player, p.pos)
+        re = p.render()
+        display.blit(re, p.pos)
 
         for roid in asteroids:
             asteroids.pop(asteroids.index(roid))
@@ -695,7 +760,37 @@ while True:
         for particle in particles:
             particle.draw()
 
+        if pygame.time.get_ticks() - p.deathTime > 1000: #You
+            font = pygame.font.SysFont('ArialBold', 200)
+            text = font.render('YOU', True, (255,255,255))
+            display.blit(text, ((size[0]/2)-(text.get_rect().width/2), 150))
+        
+        if pygame.time.get_ticks() - p.deathTime > 2000: #Lose
+            font = pygame.font.SysFont('ArialBold', 200)
+            text = font.render('LOSE', True, (255,255,255))
+            display.blit(text, ((size[0]/2)-(text.get_rect().width/2), (size[1]-150-text.get_rect().height)))
+
+        if pygame.time.get_ticks() - p.deathTime > 3000: #restart button
+            font = pygame.font.SysFont('ArialBold', 150)
+            text = font.render('Restart', True, (255,255,255))
+
+            w,h = text.get_size()
+            btn = pygame.Surface((w+50, h+50))
+
+            btnRect = btn.get_rect(center=((size[0]/2), size[1]/2))
+            pygame.draw.rect(display, (0,255,0), btnRect)
+            if mouse.colliderect(btnRect):
+                btn.fill((200,200,200))
+                if pygame.mouse.get_pressed()[0] == 1:
+                    
+                    p = restart()
+            else:
+                btn.fill((150,150,150))
+
+            x,y = btn.get_rect().center
+            btn.blit(text, (x-text.get_width()/2, y-text.get_height()/2))
             
+            display.blit(btn,((size[0]/2)-(btn.get_rect().width/2), (size[1]/2-(btn.get_rect().height/2))) )
 
     update(display, screen)
     display.fill((0,255,255))
