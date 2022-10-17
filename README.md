@@ -1,2 +1,2 @@
 # EngProj
-This is a python game for my english class
+A symbolic recreation of the classic Asteroids game for my HighSchool english class
